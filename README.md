@@ -1,0 +1,2 @@
+# rafmat
+A smiple expression solver written in python. Can store variables for sigle session. Expressions may include +, -, *, /, (, ), <, >, <=, >=, ==, =, SIN, COS, TAN, CTG, SQRT, POW, LOG. EXIT to exit session.
