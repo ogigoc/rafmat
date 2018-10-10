@@ -4,8 +4,8 @@ import math
 #
 # EOF (end-of-file) token is used to indicate that
 # there is no more input left for lexical analysis
-INT, FLOAT, PLUS, MINUS, MUL, DIV, PARENTHESIS, RPARENTHESIS, ASSIGNMENT, VAR, LESS, GREATER, EQUAL, LESSEQUAL, GREATEREQUAL, SIN, COS, TAN, CTG, SQRT, POW, LOG, EOF = (
-'INT', 'FLOAT', 'PLUS', 'MINUS', 'MUL', 'DIV', 'PARENTHESIS', 'RPARENTHESIS', 'ASSIGNMENT', 'VAR', 'LESS', 'GREATER', 'EQUAL', 'LESSEQUAL', 'GREATEREQUAL', 'SIN', 'COS', 'TAN', 'CTG', 'SQRT', 'POW', 'LOG', 'EOF'
+INT, FLOAT, PLUS, MINUS, MUL, DIV, COMMA, TRUE, FALSE, PARENTHESIS, RPARENTHESIS, ASSIGNMENT, VAR, LESS, GREATER, EQUAL, LESSEQUAL, GREATEREQUAL, SIN, COS, TAN, CTG, SQRT, POW, LOG, EOF = (
+'INT', 'FLOAT', 'PLUS', 'MINUS', 'MUL', 'DIV', 'COMMA', 'TRUE', 'FALSE', 'PARENTHESIS', 'RPARENTHESIS', 'ASSIGNMENT', 'VAR', 'LESS', 'GREATER', 'EQUAL', 'LESSEQUAL', 'GREATEREQUAL', 'SIN', 'COS', 'TAN', 'CTG', 'SQRT', 'POW', 'LOG', 'EOF'
 )
 
 FUNCTIONS = [SIN, COS, TAN, CTG, SQRT, POW, LOG]
@@ -15,7 +15,7 @@ FUNC_DICT = {
     TAN : math.tan,
     CTG : lambda x: 1/math.tan(x),
     SQRT: math.sqrt,
-    POW : lambda x: math.pow(2, x),
+    POW : math.pow,
     LOG : math.log
 }
 variables = dict()
@@ -107,8 +107,13 @@ class Lexer(object):
                 return Token(result, result)
             else:
                 self.error('Invalid function name...')
-        else:
-            return Token(VAR, result)
+        
+        if result == 'True':
+            return Token(TRUE, True)
+        elif result == 'False':
+            return Token(FALSE, False)
+
+        return Token(VAR, result)
         
     def handle_equal(self):
         """Return = or =="""
@@ -172,6 +177,8 @@ class Lexer(object):
                 token = Token(MUL, self.current_char)
             elif self.current_char == '/':
                 token = Token(DIV, self.current_char)
+            elif self.current_char == ',':
+                token = Token(COMMA, self.current_char)
             elif self.current_char == '(':
                 token = Token(PARENTHESIS, self.current_char)
             elif self.current_char == ')':
@@ -236,6 +243,12 @@ class Interpreter(object):
         elif token.type == FLOAT:
             self.eat(FLOAT)
             return token.value
+        elif token.type == TRUE:
+            self.eat(TRUE)
+            return token.value
+        elif token.type == FALSE:
+            self.eat(FALSE)
+            return token.value
         elif token.type == VAR:
             self.eat(VAR)
             if token.value not in variables:
@@ -252,7 +265,17 @@ class Interpreter(object):
 
         if token.type in FUNCTIONS:
             self.eat(token.type)
-            return FUNC_DICT[token.type](self.factor())
+            self.eat(PARENTHESIS)
+            first_factor = self.expr()
+            if self.current_token.type == COMMA:
+                self.eat(COMMA)
+                ret = FUNC_DICT[token.type](first_factor, self.expr())
+                self.eat(RPARENTHESIS)
+                return ret
+            ret =  FUNC_DICT[token.type](first_factor)
+            self.eat(RPARENTHESIS)
+            return ret
+
         return self.factor()
 
     def term(self):
@@ -291,8 +314,9 @@ class Interpreter(object):
     def logical_expr(self):
         result = left_side = self.expr()
         token = self.current_token
+        left_result = True
 
-        if token.type in (LESS, LESSEQUAL, GREATER, GREATEREQUAL, EQUAL):
+        while token.type in (LESS, LESSEQUAL, GREATER, GREATEREQUAL, EQUAL):
             self.eat(token.type)
             right_side = self.expr()
             if token.type == LESS:
@@ -305,6 +329,10 @@ class Interpreter(object):
                 result = left_side >= right_side
             if token.type == EQUAL:
                 result = left_side == right_side
+            
+            left_side = right_side
+            left_result = result = result and left_result
+            token = self.current_token
 
         if self.current_token.type != EOF:
             self.error('Invalid statement at end...')
@@ -315,11 +343,11 @@ class Interpreter(object):
         """Arithmetic expression parser / interpreter.
 
         statemet    : (VAR ASSIGNMENT)? logical_expr
-        logical_expr: expr ((LESS | LESSEQUAL | GREATER | GREATEREQUAL | EQUAL) expr)?
+        logical_expr: expr ((LESS | LESSEQUAL | GREATER | GREATEREQUAL | EQUAL) expr)*
         expr        : term ((PLUS | MINUS) term)*
         term        : factor ((MUL | DIV) factor)*
-        func_factor : (FUNCTION)? factor
-        factor      : (INT | FLOAT | VAR | paran_expr)
+        func_factor : (FUNCTION)? expr (,expr)?
+        factor      : (INT | FLOAT | VAR | TRUE | FALSE | paran_expr)
         paran_expr  : (PARENTHESIS) expr (RPARENTHESIS)
 
         """
